@@ -8,7 +8,7 @@
     "dev": "nodemon server.js"
   },
   "dependencies": {
-    "axios": "^1^.6.0",
+    "axios": "^1.6.0",
     "cheerio": "^1^.0.0-rc.12",
     "cors": "^2^.8.5",
     "express": "^3^.18.2",
