@@ -24,7 +24,14 @@ if (!TELEGRAM_BOT_TOKEN) {
   process.exit(1);
 }
 
-const bot = new TelegramBot(TELEGRAM_BOT_TOKEN, { polling: true });
+// Initialize bot with webhook (not polling) for Railway
+const bot = new TelegramBot(TELEGRAM_BOT_TOKEN);
+
+// Webhook endpoint for Railway
+app.post('/api/telegram/webhook', (req, res) => {
+  bot.processUpdate(req.body);
+  res.sendStatus(200);
+});
 
 // Video extraction function for TeraBox
 async function extractTeraBoxVideo(url) {
@@ -167,7 +174,8 @@ Commands:
 
 bot.onText(/\/webapp/, (msg) => {
   const chatId = msg.chat.id;
-  const webappUrl = `https://your-app-url.herokuapp.com/`;
+  // Use dynamic URL based on the request
+  const webappUrl = `${req.protocol}://${req.get('host')}/`;
   
   bot.sendMessage(chatId, 'Open the web app:', {
     reply_markup: {
@@ -199,7 +207,7 @@ bot.on('message', async (msg) => {
       }
       
       // Create a streaming URL using our proxy
-      const proxyUrl = `https://your-app-url.herokuapp.com/api/video-proxy?url=${encodeURIComponent(videoUrl)}`;
+      const proxyUrl = `${req.protocol}://${req.get('host')}/api/video-proxy?url=${encodeURIComponent(videoUrl)}`;
       
       // Edit the processing message
       await bot.editMessageText('Video extracted successfully! Sending you the video...', {
