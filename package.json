@@ -8,13 +8,13 @@
     "dev": "nodemon server.js"
   },
   "dependencies": {
-    "axios": ".21.4",
-    "cheerio": "^1^.0.0-rc.10",
+    "axios": "^1^.6.0",
+    "cheerio": "^1^.0.0-rc.12",
     "cors": "^2^.8.5",
-    "express": "^3^.17.1",
-    "node-telegram-bot-api": ".54.0"
+    "express": "^3^.18.2",
+    "node-telegram-bot-api": ".61.0"
   },
   "devDependencies": {
-    "nodemon": "^2^.0.14"
+    "nodemon": "^4^.0.1"
   }
 }
