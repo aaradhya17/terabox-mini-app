@@ -24,8 +24,19 @@ if (!TELEGRAM_BOT_TOKEN) {
   process.exit(1);
 }
 
+// Base URL for this deployment (used for webhook + webapp links)
+const BASE_URL = process.env.RAILWAY_PUBLIC_DOMAIN
+  ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
+  : `http://localhost:${PORT}`;
+
 // Initialize bot with webhook (not polling) for Railway
 const bot = new TelegramBot(TELEGRAM_BOT_TOKEN);
+
+// Register the webhook with Telegram so it knows where to send updates
+const WEBHOOK_URL = `${BASE_URL}/api/telegram/webhook`;
+bot.setWebHook(WEBHOOK_URL)
+  .then(() => console.log('Webhook set to:', WEBHOOK_URL))
+  .catch((err) => console.error('Failed to set webhook:', err));
 
 // Webhook endpoint for Railway
 app.post('/api/telegram/webhook', (req, res) => {
@@ -36,26 +47,20 @@ app.post('/api/telegram/webhook', (req, res) => {
 // Video extraction function for TeraBox
 async function extractTeraBoxVideo(url) {
   try {
-    // Fetch the TeraBox page
     const response = await axios.get(url, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
       }
     });
-    
+
     const $ = cheerio.load(response.data);
-    
-    // Extract the video ID from the page (this is a simplified example)
-    // In reality, you'd need to analyze the page structure to find the correct elements
     const videoId = $('meta[property="og:video"]').attr('content');
-    
+
     if (!videoId) {
       throw new Error('Video not found');
     }
-    
-    // Construct direct video URL (this is a simplified example)
+
     const directUrl = `https://tera-box-proxy.com/video/${videoId}`;
-    
     return directUrl;
   } catch (error) {
     console.error('Error extracting TeraBox video:', error);
@@ -66,25 +71,20 @@ async function extractTeraBoxVideo(url) {
 // Video extraction function for DiskWala
 async function extractDiskWalaVideo(url) {
   try {
-    // Fetch the DiskWala page
     const response = await axios.get(url, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
       }
     });
-    
+
     const $ = cheerio.load(response.data);
-    
-    // Extract the video ID from the page (this is a simplified example)
     const videoId = $('meta[property="og:video"]').attr('content');
-    
+
     if (!videoId) {
       throw new Error('Video not found');
     }
-    
-    // Construct direct video URL (this is a simplified example)
+
     const directUrl = `https://diskwala-proxy.com/video/${videoId}`;
-    
     return directUrl;
   } catch (error) {
     console.error('Error extracting DiskWala video:', error);
@@ -95,14 +95,14 @@ async function extractDiskWalaVideo(url) {
 // API endpoint to extract video URL
 app.get('/api/extract-video', async (req, res) => {
   const { url } = req.query;
-  
+
   if (!url) {
     return res.status(400).json({ error: 'URL is required' });
   }
-  
+
   try {
     let videoUrl;
-    
+
     if (url.includes('terabox')) {
       videoUrl = await extractTeraBoxVideo(url);
     } else if (url.includes('diskwala')) {
@@ -110,7 +110,7 @@ app.get('/api/extract-video', async (req, res) => {
     } else {
       return res.status(400).json({ error: 'Unsupported URL' });
     }
-    
+
     res.json({ videoUrl });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -120,11 +120,11 @@ app.get('/api/extract-video', async (req, res) => {
 // Proxy endpoint for streaming videos
 app.get('/api/video-proxy', async (req, res) => {
   const { url } = req.query;
-  
+
   if (!url) {
     return res.status(400).send('URL is required');
   }
-  
+
   try {
     const response = await axios({
       method: 'GET',
@@ -135,12 +135,10 @@ app.get('/api/video-proxy', async (req, res) => {
         'Referer': 'https://terabox.com/'
       }
     });
-    
-    // Set headers for video streaming
+
     res.setHeader('Content-Type', 'video/mp4');
     res.setHeader('Content-Disposition', 'inline');
-    
-    // Pipe the video stream to the response
+
     response.data.pipe(res);
   } catch (error) {
     console.error('Error streaming video:', error);
@@ -168,15 +166,14 @@ Commands:
 /terms - Terms of service
 /webapp - Open the web app
   `;
-  
+
   bot.sendMessage(chatId, welcomeMessage);
 });
 
 bot.onText(/\/webapp/, (msg) => {
   const chatId = msg.chat.id;
-  // Use dynamic URL based on the request
-  const webappUrl = `${req.protocol}://${req.get('host')}/`;
-  
+  const webappUrl = `${BASE_URL}/`;
+
   bot.sendMessage(chatId, 'Open the web app:', {
     reply_markup: {
       inline_keyboard: [[
@@ -190,46 +187,38 @@ bot.onText(/\/webapp/, (msg) => {
 bot.on('message', async (msg) => {
   const chatId = msg.chat.id;
   const text = msg.text;
-  
-  // Check if the message is a URL
+
   if (text && (text.includes('terabox.com') || text.includes('diskwala.com'))) {
-    // Send a "processing" message
     const processingMessage = await bot.sendMessage(chatId, 'Processing your video link... This may take a moment.');
-    
+
     try {
-      // Extract video URL
       let videoUrl;
-      
+
       if (text.includes('terabox.com')) {
         videoUrl = await extractTeraBoxVideo(text);
       } else if (text.includes('diskwala.com')) {
         videoUrl = await extractDiskWalaVideo(text);
       }
-      
-      // Create a streaming URL using our proxy
-      const proxyUrl = `${req.protocol}://${req.get('host')}/api/video-proxy?url=${encodeURIComponent(videoUrl)}`;
-      
-      // Edit the processing message
+
+      const proxyUrl = `${BASE_URL}/api/video-proxy?url=${encodeURIComponent(videoUrl)}`;
+
       await bot.editMessageText('Video extracted successfully! Sending you the video...', {
-        chatId: chatId,
-        messageId: processingMessage.message_id
+        chat_id: chatId,
+        message_id: processingMessage.message_id
       });
-      
-      // Send the video
+
       await bot.sendVideo(chatId, proxyUrl, {
         caption: 'Here is your video! Enjoy watching.'
       });
-      
-      // Delete the processing message
+
       await bot.deleteMessage(chatId, processingMessage.message_id);
-      
+
     } catch (error) {
       console.error('Error processing video:', error);
-      
-      // Edit the processing message with an error
+
       await bot.editMessageText(`Error: ${error.message}`, {
-        chatId: chatId,
-        messageId: processingMessage.message_id
+        chat_id: chatId,
+        message_id: processingMessage.message_id
       });
     }
   }
