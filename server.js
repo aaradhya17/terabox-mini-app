@@ -2,7 +2,7 @@
 require('dotenv').config();
 const express = require('express');
 const axios = require('axios');
-const puppeteer = require('puppeteer'); // Added Puppeteer
+const puppeteer = require('puppeteer'); 
 const cors = require('cors');
 const TelegramBot = require('node-telegram-bot-api');
 const path = require('path');
@@ -33,10 +33,16 @@ app.post('/api/telegram/webhook', (req, res) => {
   res.sendStatus(200);
 });
 
-// New Puppeteer Extraction Logic
+// Updated Puppeteer Extraction Logic for Docker/Railway
 async function extractVideoUrl(url) {
   const browser = await puppeteer.launch({
-    args: ['--no-sandbox', '--disable-setuid-sandbox']
+    executablePath: '/usr/bin/chromium', // Point to the system-installed chromium
+    args: [
+      '--no-sandbox', 
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--no-zygote'
+    ]
   });
   try {
     const page = await browser.newPage();
