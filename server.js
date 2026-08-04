@@ -234,3 +234,26 @@ bot.on('message', async (msg) => {
       app.listen(PORT, () => {
         console.log(`Server running on port ${PORT}`);
       });
+// Add this near the top of server.js
+const cookies = {
+  sessionid: 'g.a000BAmyexmX7WmKBk90u8uOJu9Lfp0W_4onU3RfqVWksPezdKcjeDXPB-RjrNq4FMHe-P54hgACgYKAfcSARASFQHGX2Miasa_pnk1esTBFWBlhaLODxoVAUF8yKppOqIvbiu4kE6yYLcjZrbG0076',    // Paste your sessionid here
+  token: 'Yk9w2CfC_0DL8FNWHHP-HZRA',             // Paste your token here
+  userid: '1785858052983.0679e74f-4a91-4f65-895f-0d97e4c5ee57'           // Paste your userid here
+};
+
+// Update your extractTeraBoxVideo function
+async function extractTeraBoxVideo(url) {
+  try {
+    const response = await axios.get(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Cookie': Object.entries(cookies).map(([key, value]) => `${key}=${value}`).join('; ')
+      }
+    });
+
+    // ... rest of your extraction logic
+  } catch (error) {
+    console.error("Extraction Error:", error.message);
+    throw error;
+  }
+}
