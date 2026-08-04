@@ -215,3 +215,22 @@ bot.on('message', async (msg) => {
       await bot.sendVideo(chatId, proxyUrl, {
         caption: 'Here is your video! Enjoy watching.'
       });
+// Delete the processing message
+      await bot.deleteMessage(chatId, processingMessage.message_id);
+      
+      } catch (error) {
+        console.error('Error processing video:', error);
+      
+      // Edit the processing message with an error
+      await bot.editMessageText(`Error: ${error.message}`, {
+        chatId: chatId,
+        messageId: processingMessage.message_id
+      });
+    }
+  }
+});
+
+//   Start the server
+      app.listen(PORT, () => {
+        console.log(`Server running on port ${PORT}`);
+      });
