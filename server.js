@@ -1,97 +1,74 @@
-// server.js
-require('dotenv').config();
-const express = require('express');
-const axios = require('axios');
-const puppeteer = require('puppeteer'); 
-const cors = require('cors');
-const TelegramBot = require('node-telegram-bot-api');
-const path = require('path');
+// ... (keep all your imports and setup) ...
 
-const app = express();
-const PORT = process.env.PORT || 3000;
-
-app.use(cors());
-app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
-
-const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-if (!TELEGRAM_BOT_TOKEN) {
-  console.error('TELEGRAM_BOT_TOKEN is not set');
-  process.exit(1);
-}
-
-const BASE_URL = process.env.RAILWAY_PUBLIC_DOMAIN
-  ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
-  : `http://localhost:${PORT}`;
-
-const bot = new TelegramBot(TELEGRAM_BOT_TOKEN);
-const WEBHOOK_URL = `${BASE_URL}/api/telegram/webhook`;
-bot.setWebHook(WEBHOOK_URL).catch(console.error);
-
-app.post('/api/telegram/webhook', (req, res) => {
-  bot.processUpdate(req.body);
-  res.sendStatus(200);
-});
-
-// Updated Puppeteer Extraction Logic for Docker/Railway
-async function extractVideoUrl(url) {
-  const browser = await puppeteer.launch({
-    executablePath: '/usr/bin/chromium', // Point to the system-installed chromium
-    args: [
-      '--no-sandbox', 
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-      '--no-zygote'
-    ]
-  });
+// UPDATED: Robust Extraction Function
+async function extractTeraBoxVideo(url) {
   try {
-    const page = await browser.newPage();
-    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
-    await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
+    console.log(`Attempting to fetch: ${url}`);
     
-    // Attempt to find the video source
-    const videoUrl = await page.evaluate(() => {
-      const video = document.querySelector('video');
-      return video ? video.src : null;
+    const response = await axios.get(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5'
+      },
+      timeout: 10000 // 10 second timeout
     });
 
-    if (!videoUrl) throw new Error('Video source not found');
-    return videoUrl;
-  } finally {
-    await browser.close();
+    const $ = cheerio.load(response.data);
+    
+    // TeraBox often doesn't have og:video. We need to look for script tags or API calls.
+    // This is a simplified check. In production, you'd need to parse the JS or use a proxy.
+    // For now, let's look for any video link in the page source just in case.
+    const videoMeta = $('meta[property="og:video"]').attr('content');
+    
+    if (videoMeta) {
+      console.log("Found video meta:", videoMeta);
+      return videoMeta;
+    }
+
+    // If not found, TeraBox usually requires a session. 
+    // We will return a placeholder or throw a specific error to handle in UI.
+    // For this demo, we will simulate a "success" with a dummy link to test the UI flow,
+    // BUT in reality, this will fail to play.
+    
+    console.warn("Direct video link not found in HTML. TeraBox likely requires session/cookies.");
+    
+    // OPTION: Throw a specific error so your UI can show a helpful message
+    throw new Error("TeraBox requires a logged-in session to extract video links. This simple extractor cannot bypass their security yet.");
+    
+  } catch (error) {
+    console.error("Extraction Error:", error.message);
+    throw error; // Re-throw so the API catches it
   }
 }
 
-// Bot command handler
+// ... (keep the rest of your API and Bot logic) ...
+
+// UPDATED: Bot Message Handler with Better Error Handling
 bot.on('message', async (msg) => {
   const chatId = msg.chat.id;
   const text = msg.text;
 
-  if (text && (text.includes('terabox.com') || text.includes('diskwala.com'))) {
-    const statusMsg = await bot.sendMessage(chatId, 'Extracting video... please wait.');
-
+  if (text && (text.includes('terabox') || text.includes('diskwala'))) {
     try {
-      const videoUrl = await extractVideoUrl(text);
+      const processingMsg = await bot.sendMessage(chatId, 'Processing your link...');
       
-      // Send result as a button to prevent IP blocking on Telegram's side
-      await bot.editMessageText('Video ready! Use the button below to watch:', {
-        chat_id: chatId,
-        message_id: statusMsg.message_id,
-        reply_markup: {
-          inline_keyboard: [[
-            { text: 'Watch Video', url: videoUrl }
-          ]]
-        }
-      });
-    } catch (error) {
-      await bot.editMessageText(`Error: ${error.message}`, {
-        chat_id: chatId,
-        message_id: statusMsg.message_id
-      });
+      let videoUrl;
+      if (text.includes('terabox')) {
+        videoUrl = await extractTeraBoxVideo(text);
+      } else {
+        videoUrl = await extractDiskWalaVideo(text);
+      }
+
+      const proxyUrl = `${req.protocol}://${req.get('host')}/api/video-proxy?url=${encodeURIComponent(videoUrl)}`;
+      
+      await bot.editMessageText('Video found! Sending...', { chatId, messageId: processingMsg.message_id });
+      await bot.sendVideo(chatId, proxyUrl, { caption: 'Here is your video' });
+      await bot.deleteMessage(chatId, processingMsg.message_id);
+
+    } catch (err) {
+      console.error("Bot Error:", err);
+      await bot.editMessageText(`❌ Error: ${err.message}`, { chatId, messageId: msg.message_id }); // Or use processingMsg if you kept it
     }
   }
-});
-
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
 });
